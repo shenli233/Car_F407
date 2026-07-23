@@ -67,7 +67,9 @@ uint32_t pos2 = 0;
 uint32_t pos1 = 0;
 float Motor_Cur_Pos1 = 0.0f;
 float Motor_Cur_Pos2 = 0.0f;
+//2的角度为正，1的角度为负
 uint8_t dir_m1 = 1, dir_m2 = 0;
+uint8_t state = 0; // 0: idle, 1: moving forward, 2: turning
 
 uint8_t raw_data[11];
 short roll_raw, pitch_raw, yaw_raw;
@@ -77,7 +79,6 @@ uint8_t rxData[11];
 PID pid;
 
 float distance_pulses[Motor] = {0.0f, 0.0f};
-uint8_t stop_flag = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -128,7 +129,7 @@ void Motor_Stop(PID *pid){
   // Emm_V5_Synchronous_motion(0);
   Emm_V5_Vel_Control_1(dir_m1, 0, 10, 0);
   HAL_Delay(10);
-  Emm_V5_Vel_Control_2(dir_m1, 0, 10, 0);
+  Emm_V5_Vel_Control_2(dir_m2, 0, 10, 0);
 }
 
 /* USER CODE END 0 */
@@ -195,6 +196,7 @@ int main(void)
 
   pid.Target[0]=50;
   pid.Target[1]=50;
+  state = 1;
 
   Motor_Start(&pid);
   /* USER CODE END 2 */
@@ -204,15 +206,23 @@ int main(void)
   
   while (1)
   {
-    if(((Motor_Cur_Pos1 + Motor_Cur_Pos2)/2.0f >= (2686.0f - 120.0f)) && stop_flag == 0){
-      Motor_Stop(&pid);
-      stop_flag = 1;
-      // HAL_Delay(10);
-      // Emm_V5_Vel_Control(1, dir_m1, 0, 10, 1);
-      // HAL_Delay(10);
-      // Emm_V5_Vel_Control(2, dir_m2, 0, 10, 1);
-      // HAL_Delay(10);
-      // Emm_V5_Synchronous_motion(0);
+    if (pid.flag == 1) {
+      switch (state) {
+        case 1:
+          //电机1的角度为负，电机2的角度为正
+          if((-Motor_Cur_Pos1 + Motor_Cur_Pos2)/2.0f >= (2686.0f - 120.0f)){
+            Motor_Stop(&pid);
+            // pid.flag = 1;
+            // state = 2;
+            // pid.Target_Yaw = 180.0f;
+            // dir_m1 = 0;
+          }
+          break;
+        case 2:
+          break;
+        default:
+          break;
+      }
     }
     /* USER CODE END WHILE */
 
@@ -307,9 +317,8 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
                     );
       Motor_Cur_Pos2 = (float)pos2 * 360.0f / 65536.0f;
       if(rxCmd2[2]) { Motor_Cur_Pos2 = -Motor_Cur_Pos2; }
-      if (Motor_Cur_Pos2 < 0.0f)  Motor_Cur_Pos2 = -Motor_Cur_Pos2;
 
-      // printf("Motor2 Current Position: %.2f degrees\r\n", Motor_Cur_Pos2);
+      printf("Motor2 Current Position: %.2f degrees\r\n", Motor_Cur_Pos2);
     }
     HAL_UARTEx_ReceiveToIdle_DMA(&huart2, rxCmd2, sizeof(rxCmd2));
     __HAL_DMA_DISABLE_IT(huart2.hdmarx, DMA_IT_HT);
@@ -326,9 +335,8 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
                     );
       Motor_Cur_Pos1 = (float)pos1 * 360.0f / 65536.0f;
       if(rxCmd1[2]) { Motor_Cur_Pos1 = -Motor_Cur_Pos1; }
-      if (Motor_Cur_Pos1 < 0.0f)  Motor_Cur_Pos1 = -Motor_Cur_Pos1;
 
-      // printf("Motor1 Current Position: %.2f degrees\r\n", Motor_Cur_Pos1);
+      printf("Motor1 Current Position: %.2f degrees\r\n", Motor_Cur_Pos1);
     }
     HAL_UARTEx_ReceiveToIdle_DMA(&huart5, rxCmd1, sizeof(rxCmd1));
     __HAL_DMA_DISABLE_IT(huart5.hdmarx, DMA_IT_HT);
