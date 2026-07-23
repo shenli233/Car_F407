@@ -516,7 +516,7 @@ void X_V2_Origin_Modify_SL_RP(uint8_t addr, bool svF, uint16_t sl_rp)
 	* @param    time_ms ����ʱʱ��
   * @retval   ��ַ + ������ + ����״̬ + У���ֽ�
   */
-void Emm_V5_Auto_Return_Sys_Params_Timed(uint8_t addr, SysParams_t s, uint16_t time_ms)
+void Emm_V5_Auto_Return_Sys_Params_Timed_2(uint8_t addr, SysParams_t s, uint16_t time_ms)
 {
   uint8_t i = 0; __IO static uint8_t cmd[16] = {0};
   
@@ -557,6 +557,49 @@ void Emm_V5_Auto_Return_Sys_Params_Timed(uint8_t addr, SysParams_t s, uint16_t t
   
   // ��������
   HAL_UART_Transmit_DMA(&huart2, (uint8_t *)cmd, i);
+}
+
+void Emm_V5_Auto_Return_Sys_Params_Timed_1(uint8_t addr, SysParams_t s, uint16_t time_ms)
+{
+  uint8_t i = 0; __IO static uint8_t cmd[16] = {0};
+  
+  // װ������
+  cmd[i] = addr; ++i;                   // ��ַ
+
+  cmd[i] = 0x11; ++i;                   // ������
+
+  cmd[i] = 0x18; ++i;                   // ������
+
+  switch(s)                             // ��Ϣ������
+  {
+    case S_VBUS : cmd[i] = 0x24; ++i; break;	// ��ȡ���ߵ�ѹ
+		case S_CBUS : cmd[i] = 0x26; ++i; break;	// ��ȡ���ߵ���
+    case S_CPHA : cmd[i] = 0x27; ++i; break;	// ��ȡ�����?
+		case S_ENCO : cmd[i] = 0x29; ++i; break;	// ��ȡ������ԭʼֵ
+		case S_CLKC : cmd[i] = 0x30; ++i; break;	// ��ȡʵʱ������
+    case S_ENCL : cmd[i] = 0x31; ++i; break;	// ��ȡ�������Ի�У׼��ı������?
+		case S_CLKI : cmd[i] = 0x32; ++i; break;	// ��ȡ����������
+    case S_TPOS : cmd[i] = 0x33; ++i; break;	// ��ȡ���Ŀ��λ��?
+    case S_SPOS : cmd[i] = 0x34; ++i; break;	// ��ȡ���ʵʱ�趨��Ŀ��λ��?
+		case S_VEL  : cmd[i] = 0x35; ++i; break;	// ��ȡ���ʵʱת��?
+    case S_CPOS : cmd[i] = 0x36; ++i; break;	// ��ȡ���ʵʱλ��?
+    case S_PERR : cmd[i] = 0x37; ++i; break;	// ��ȡ���λ�����
+		case S_VBAT : cmd[i] = 0x38; ++i; break;	// ��ȡ��Ȧ��������ص�ѹ��Y42��
+		case S_TEMP : cmd[i] = 0x39; ++i; break;	// ��ȡ���ʵʱ�¶ȣ�Y42��
+    case S_FLAG : cmd[i] = 0x3A; ++i; break;	// ��ȡ���״̬��־�?
+    case S_OFLAG: cmd[i] = 0x3B; ++i; break;	// ��ȡ����״̬��־λ
+		case S_OAF  : cmd[i] = 0x3C; ++i; break;	// ��ȡ���״̬��־�? + ����״̬��־λ��Y42��
+		case S_PIN  : cmd[i] = 0x3D; ++i; break;	// ��ȡ����״̬��Y42��
+    default: break;
+  }
+	
+	cmd[i] = (uint8_t)(time_ms >> 8);  ++i;	// ��ʱʱ��
+	cmd[i] = (uint8_t)(time_ms >> 0);  ++i;
+
+  cmd[i] = 0x6B; ++i;                   	// У���ֽ�
+  
+  // ��������
+  HAL_UART_Transmit_DMA(&huart5, (uint8_t *)cmd, i);
 }
 
 /**

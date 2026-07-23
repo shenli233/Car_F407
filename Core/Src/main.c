@@ -63,8 +63,10 @@ typedef struct{
 
 uint8_t rxCmd1[50];
 uint8_t rxCmd2[50];
-uint32_t pos = 0;
-float Motor_Cur_Pos = 0.0f;
+uint32_t pos2 = 0;
+uint32_t pos1 = 0;
+float Motor_Cur_Pos1 = 0.0f;
+float Motor_Cur_Pos2 = 0.0f;
 uint8_t dir_m1 = 1, dir_m2 = 0;
 
 uint8_t raw_data[11];
@@ -86,6 +88,7 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+//printf重定向到串口1
 int __io_putchar(int ch){
   HAL_UART_Transmit(&huart1, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
   return ch;
@@ -167,13 +170,19 @@ int main(void)
   MX_UART5_Init();
   /* USER CODE BEGIN 2 */
   HAL_Delay(3000);
-  Emm_V5_Auto_Return_Sys_Params_Timed(2, S_CPOS, 10);
+  //两个电机开始发送位置数据（uart5对应地址1，uart2对应地址2）
+  Emm_V5_Auto_Return_Sys_Params_Timed_2(2, S_CPOS, 10);
+  Emm_V5_Auto_Return_Sys_Params_Timed_1(1, S_CPOS, 10);
   HAL_Delay(100);
-  HAL_UARTEx_ReceiveToIdle_DMA(&huart2, rxCmd1, sizeof(rxCmd1));
+  //开始接收两个电机的位置数据
+  HAL_UARTEx_ReceiveToIdle_DMA(&huart2, rxCmd2, sizeof(rxCmd2));
   __HAL_DMA_DISABLE_IT(huart2.hdmarx, DMA_IT_HT);
+  HAL_UARTEx_ReceiveToIdle_DMA(&huart5, rxCmd1, sizeof(rxCmd1));
+  __HAL_DMA_DISABLE_IT(huart5.hdmarx, DMA_IT_HT);
+  //开始接收IMU数据
   HAL_UARTEx_ReceiveToIdle_DMA(&huart3, rxData, sizeof(rxData));
   __HAL_DMA_DISABLE_IT(huart3.hdmarx, DMA_IT_HT);
-
+  //调试正常启动标志
   printf("System Start OK!\r\n");
 
   // Emm_V5_Vel_Control(1, dir_m1, pid.Target[0], 10, 1);
@@ -181,10 +190,13 @@ int main(void)
   // Emm_V5_Vel_Control(2, dir_m2, pid.Target[1], 10, 1);
   // HAL_Delay(10);
   // Emm_V5_Synchronous_motion(0);
+  //初始化PID
   PID_Init(&pid);
+
   pid.Target[0]=50;
   pid.Target[1]=50;
-  Motor_Start(&pid); 
+
+  Motor_Start(&pid);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -192,7 +204,7 @@ int main(void)
   
   while (1)
   {
-    if( (Motor_Cur_Pos >= 2687.0f || Motor_Cur_Pos <= -2687.0f) && stop_flag == 0){
+    if(((Motor_Cur_Pos1 + Motor_Cur_Pos2)/2.0f >= (2686.0f - 120.0f)) && stop_flag == 0){
       Motor_Stop(&pid);
       stop_flag = 1;
       // HAL_Delay(10);
@@ -285,21 +297,41 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
   if (huart == &huart2) {
-    if(rxCmd1[0] == 2 && rxCmd1[1] == 0x36 && Size == 8){
+    if(rxCmd2[0] == 2 && rxCmd2[1] == 0x36 && Size == 8){
     // 拼接成uint32_t类型
-      pos = (uint32_t)(
+      pos2 = (uint32_t)(
+                      ((uint32_t)rxCmd2[3] << 24)    |
+                      ((uint32_t)rxCmd2[4] << 16)    | 
+                      ((uint32_t)rxCmd2[5] << 8)     |
+                      ((uint32_t)rxCmd2[6] << 0)
+                    );
+      Motor_Cur_Pos2 = (float)pos2 * 360.0f / 65536.0f;
+      if(rxCmd2[2]) { Motor_Cur_Pos2 = -Motor_Cur_Pos2; }
+      if (Motor_Cur_Pos2 < 0.0f)  Motor_Cur_Pos2 = -Motor_Cur_Pos2;
+
+      // printf("Motor2 Current Position: %.2f degrees\r\n", Motor_Cur_Pos2);
+    }
+    HAL_UARTEx_ReceiveToIdle_DMA(&huart2, rxCmd2, sizeof(rxCmd2));
+    __HAL_DMA_DISABLE_IT(huart2.hdmarx, DMA_IT_HT);
+  }
+
+  if (huart == &huart5) {
+    if(rxCmd1[0] == 1 && rxCmd1[1] == 0x36 && Size == 8){
+    // 拼接成uint32_t类型
+      pos1 = (uint32_t)(
                       ((uint32_t)rxCmd1[3] << 24)    |
                       ((uint32_t)rxCmd1[4] << 16)    | 
                       ((uint32_t)rxCmd1[5] << 8)     |
                       ((uint32_t)rxCmd1[6] << 0)
                     );
-      Motor_Cur_Pos = (float)pos * 360.0f / 65536.0f;
-      if(rxCmd1[2]) { Motor_Cur_Pos = -Motor_Cur_Pos; }
+      Motor_Cur_Pos1 = (float)pos1 * 360.0f / 65536.0f;
+      if(rxCmd1[2]) { Motor_Cur_Pos1 = -Motor_Cur_Pos1; }
+      if (Motor_Cur_Pos1 < 0.0f)  Motor_Cur_Pos1 = -Motor_Cur_Pos1;
 
-      //printf("Motor Current Position: %.2f degrees\r\n", Motor_Cur_Pos);
+      // printf("Motor1 Current Position: %.2f degrees\r\n", Motor_Cur_Pos1);
     }
-    HAL_UARTEx_ReceiveToIdle_DMA(&huart2, rxCmd1, sizeof(rxCmd1));
-    __HAL_DMA_DISABLE_IT(huart2.hdmarx, DMA_IT_HT);
+    HAL_UARTEx_ReceiveToIdle_DMA(&huart5, rxCmd1, sizeof(rxCmd1));
+    __HAL_DMA_DISABLE_IT(huart5.hdmarx, DMA_IT_HT);
   }
 
   if (huart == &huart3) {

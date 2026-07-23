@@ -103,7 +103,8 @@ void X_V2_Origin_Modify_SL_RP(uint8_t addr, bool svF, uint16_t sl_rp);
 *** 读取系统参数命令
 **********************************************************/
 // 定时返回信息命令（Y42）
-void Emm_V5_Auto_Return_Sys_Params_Timed(uint8_t addr, SysParams_t s, uint16_t time_ms);
+void Emm_V5_Auto_Return_Sys_Params_Timed_1(uint8_t addr, SysParams_t s, uint16_t time_ms);
+void Emm_V5_Auto_Return_Sys_Params_Timed_2(uint8_t addr, SysParams_t s, uint16_t time_ms);
 // 读取系统参数
 void Emm_V5_Read_Sys_Params(uint8_t addr, SysParams_t s);
 /**********************************************************
