@@ -29,22 +29,12 @@
 #include <stdio.h>
 #include <string.h>
 #include "math.h"
+#include "pid.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-#define Motor 2
-typedef struct{
-  uint8_t flag;
-  float Target[Motor];
-  float Real_Target[Motor];
-  float Target_Yaw;
-  float Kp_turn;
-  //float Kd_turn = 0.005f;
-  float Angle_Error;
-  //float Last_Angle_Error;
-  float Turn_Out;
-}PID;
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -93,29 +83,6 @@ void SystemClock_Config(void);
 int __io_putchar(int ch){
   HAL_UART_Transmit(&huart1, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
   return ch;
-}
-
-void PID_Init(PID* pid){
-  pid->flag = 0;
-  pid->Target[0] = 0.0f;
-  pid->Target[1] = 0.0f;
-  pid->Real_Target[0] = 0.0f;
-  pid->Real_Target[1] = 0.0f;
-  pid->Target_Yaw = 0.0f;
-  pid->Kp_turn = 3.0f;
-  //pid->Kd_turn = 0.005f;
-  pid->Angle_Error = 0.0f;
-  pid->Turn_Out = 0.0f;
-}
-
-void PID_Start(PID *pid){
-  HAL_TIM_Base_Start_IT(&htim2);
-  pid->flag = 1;
-}
-
-void PID_Stop(PID *pid){
-  HAL_TIM_Base_Stop_IT(&htim2);
-  pid->flag = 0;
 }
 
 void Motor_Stop(PID *pid){
@@ -226,10 +193,9 @@ int main(void)
         HAL_Delay(10);
         Emm_V5_Vel_Control_2(dir_m2, 30, 10, 0);
         HAL_Delay(10);
-        if(yaw >= 163.0f || yaw <= -163.0f){
+        if(yaw >= 165.0f || yaw <= -165.0f){
           Motor_Stop(&pid);
           state = 3;
-          // PID_Start(&pid);
         }
         break;
       case 3:
@@ -300,21 +266,9 @@ void SystemClock_Config(void)
 /* USER CODE BEGIN 4 */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
   if (htim == &htim2) {
-
+    
     if(pid.flag == 1){
-      pid.Angle_Error = pid.Target_Yaw - yaw;
-
-      if (pid.Angle_Error > 180.0f)  pid.Angle_Error -= 360.0f;
-      if (pid.Angle_Error < -180.0f) pid.Angle_Error += 360.0f;
-
-      pid.Turn_Out = pid.Kp_turn * pid.Angle_Error;// + pid.Kd_turn * (pid.Angle_Error - pid.Last_Angle_Error);
-      //Last_Angle_Error = Angle_Error;
-
-      if (pid.Turn_Out > 30.0f)  pid.Turn_Out = 30.0f;
-      if (pid.Turn_Out < -30.0f) pid.Turn_Out = -30.0f;
-      
-      pid.Real_Target[0] = pid.Target[0] - pid.Turn_Out; // Left wheel target RPM
-      pid.Real_Target[1] = pid.Target[1] + pid.Turn_Out; // Right wheel target RPM
+      PID_Run(&pid, yaw);
 
       Emm_V5_Vel_Control_1(dir_m1, pid.Real_Target[1], 10, 0);
       HAL_Delay(10);

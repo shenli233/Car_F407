@@ -48,6 +48,8 @@ target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     Core/Src/Emm_V5.c
     Core/Src/jy901.c
     Core/Inc/jy901.h
+    Core/Inc/pid.h
+    Core/Src/pid.c
 )
 
 # Add include paths
