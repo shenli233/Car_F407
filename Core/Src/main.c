@@ -108,13 +108,17 @@ void PID_Init(PID* pid){
   pid->Turn_Out = 0.0f;
 }
 
-void Motor_Start(PID *pid){
+void PID_Start(PID *pid){
   HAL_TIM_Base_Start_IT(&htim2);
   pid->flag = 1;
 }
 
-void Motor_Stop(PID *pid){
+void PID_Stop(PID *pid){
+  HAL_TIM_Base_Stop_IT(&htim2);
   pid->flag = 0;
+}
+
+void Motor_Stop(PID *pid){
   pid->Angle_Error = 0.0f;
   pid->Real_Target[0] = 0.0f;
   pid->Real_Target[1] = 0.0f;
@@ -130,6 +134,7 @@ void Motor_Stop(PID *pid){
   Emm_V5_Vel_Control_1(dir_m1, 0, 10, 0);
   HAL_Delay(10);
   Emm_V5_Vel_Control_2(dir_m2, 0, 10, 0);
+  HAL_Delay(10);
 }
 
 /* USER CODE END 0 */
@@ -194,11 +199,11 @@ int main(void)
   //初始化PID
   PID_Init(&pid);
 
-  pid.Target[0]=50;
-  pid.Target[1]=50;
+  pid.Target[0]=60;
+  pid.Target[1]=60;
   state = 1;
 
-  Motor_Start(&pid);
+  PID_Start(&pid);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -206,23 +211,39 @@ int main(void)
   
   while (1)
   {
-    if (pid.flag == 1) {
-      switch (state) {
-        case 1:
-          //电机1的角度为负，电机2的角度为正
-          if((-Motor_Cur_Pos1 + Motor_Cur_Pos2)/2.0f >= (2686.0f - 120.0f)){
-            Motor_Stop(&pid);
-            // pid.flag = 1;
-            // state = 2;
-            // pid.Target_Yaw = 180.0f;
-            // dir_m1 = 0;
-          }
-          break;
-        case 2:
-          break;
-        default:
-          break;
-      }
+    switch (state) {
+      case 1:
+        //电机1的角度为负，电机2的角度为正)
+        if((-Motor_Cur_Pos1 + Motor_Cur_Pos2)/2.0f >= (2686.0f - 120.0f) && pid.flag == 1){
+          Motor_Stop(&pid);
+          state = 2;
+          PID_Stop(&pid);
+        }
+        break;
+      case 2:
+        dir_m1 = 0;
+        Emm_V5_Vel_Control_1(dir_m1, 30, 10, 0);
+        HAL_Delay(10);
+        Emm_V5_Vel_Control_2(dir_m2, 30, 10, 0);
+        HAL_Delay(10);
+        if(yaw >= 163.0f || yaw <= -163.0f){
+          Motor_Stop(&pid);
+          state = 3;
+          // PID_Start(&pid);
+        }
+        break;
+      case 3:
+        // dir_m1 = 1;
+        // pid.Target[0]=60;
+        // pid.Target[1]=60;
+        // PID_Start(&pid);
+        // if((-Motor_Cur_Pos1 + Motor_Cur_Pos2)/2.0f >= (2686.0f - 120.0f) && pid.flag == 1){
+        //   Motor_Stop(&pid);
+        //   state = 4;
+        // }
+        break;
+      default:
+        break;
     }
     /* USER CODE END WHILE */
 
@@ -299,7 +320,6 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
       HAL_Delay(10);
       Emm_V5_Vel_Control_2(dir_m2, pid.Real_Target[0], 10, 0);
       HAL_Delay(10);
-      //Emm_V5_Synchronous_motion(0);
 
     }
   }
@@ -318,7 +338,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
       Motor_Cur_Pos2 = (float)pos2 * 360.0f / 65536.0f;
       if(rxCmd2[2]) { Motor_Cur_Pos2 = -Motor_Cur_Pos2; }
 
-      printf("Motor2 Current Position: %.2f degrees\r\n", Motor_Cur_Pos2);
+      // printf("Motor2 Current Position: %.2f degrees\r\n", Motor_Cur_Pos2);
     }
     HAL_UARTEx_ReceiveToIdle_DMA(&huart2, rxCmd2, sizeof(rxCmd2));
     __HAL_DMA_DISABLE_IT(huart2.hdmarx, DMA_IT_HT);
@@ -336,7 +356,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
       Motor_Cur_Pos1 = (float)pos1 * 360.0f / 65536.0f;
       if(rxCmd1[2]) { Motor_Cur_Pos1 = -Motor_Cur_Pos1; }
 
-      printf("Motor1 Current Position: %.2f degrees\r\n", Motor_Cur_Pos1);
+      // printf("Motor1 Current Position: %.2f degrees\r\n", Motor_Cur_Pos1);
     }
     HAL_UARTEx_ReceiveToIdle_DMA(&huart5, rxCmd1, sizeof(rxCmd1));
     __HAL_DMA_DISABLE_IT(huart5.hdmarx, DMA_IT_HT);
@@ -347,14 +367,13 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size){
 
 			roll_raw  = (short)(rxData[3] << 8 | rxData[2]);
 		  pitch_raw = (short)(rxData[5] << 8 | rxData[4]);
-		  yaw_raw   = (short)(rxData[7] << 8 | rxData [6]);
+		  yaw_raw   = (short)(rxData[7] << 8 | rxData[6]);
 
 		  roll  = (float)roll_raw  / 32768.0f * 180.0f;
 		  pitch = (float)pitch_raw / 32768.0f * 180.0f;
 		  yaw   = (float)yaw_raw   / 32768.0f * 180.0f;
 
-		  //printf("Roll:%.2f Pitch:%.2f Yaw:%.2f,Out:%.2f,%.2f\r\n", roll, pitch, yaw, Real_Target[0], Real_Target[1]);
-      //printf("%.2f,%.2f,%.2f,%.2f\r\n", yaw, pid.Real_Target[0], pid.Real_Target[1], pid.Angle_Error);
+      printf("yaw: %.2f, Target0: %.2f, Target1: %.2f, Angle_Error: %.2f\r\n", yaw, pid.Real_Target[0], pid.Real_Target[1], pid.Angle_Error);
 		}
 		HAL_UARTEx_ReceiveToIdle_DMA(&huart3, rxData, sizeof(rxData));
     __HAL_DMA_DISABLE_IT(huart3.hdmarx, DMA_IT_HT);
